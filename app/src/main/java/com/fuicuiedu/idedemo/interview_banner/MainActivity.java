@@ -1,5 +1,7 @@
 package com.fuicuiedu.idedemo.interview_banner;
 
+import android.os.Handler;
+import android.os.Message;
 import android.support.v4.view.PagerAdapter;
 import android.support.v4.view.ViewPager;
 import android.support.v7.app.AppCompatActivity;
@@ -11,7 +13,9 @@ import android.widget.TextView;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -38,7 +42,7 @@ public class MainActivity extends AppCompatActivity {
     };
     private ScheduledExecutorService scheduledExecutorService;//线程池，用来定时轮播
     private int currentItem;
-    private int oldPosition;//记录上一个点的位置
+    private int oldPosition = 0;//记录上一个点的位置
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -71,8 +75,74 @@ public class MainActivity extends AppCompatActivity {
         adapter = new ViewPagerAdapter();
         mViewPager.setAdapter(adapter);
 
+        mViewPager.addOnPageChangeListener(new ViewPager.OnPageChangeListener() {
+            @Override
+            public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {
+
+            }
+
+            @Override
+            public void onPageSelected(int position) {
+                //标题的改变
+                title.setText(titles[position]);
+                //小点点的改变
+                dots.get(position).setBackgroundResource(R.drawable.dot_focused);
+                dots.get(oldPosition).setBackgroundResource(R.drawable.dot_normal);
+
+                oldPosition = position;
+                currentItem = position;//做轮播的时候会用到
+            }
+
+            @Override
+            public void onPageScrollStateChanged(int state) {
+
+            }
+        });
+
     }
 
+    @Override
+    protected void onStart() {
+        super.onStart();
+        //开启一个单个后台线程
+        scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
+        //给线程添加一个定时的调度任务,（延迟initialDelay时间后开始执行command，
+        //并且按照period时间周期性重复调用（周期时间包括command运行时间，
+        //如果周期时间比command运行时间断，则command运行完毕后，立刻重复运行））
+        scheduledExecutorService.scheduleWithFixedDelay(
+                new ViewPagerTask(),
+                2,
+                2,
+                TimeUnit.SECONDS
+        );
+    }
+
+    private class ViewPagerTask implements Runnable{
+        @Override
+        public void run() {
+            //用取余的方式来确定currentItem
+            currentItem = (currentItem + 1) % imageIds.length;
+            mhandler.sendEmptyMessage(0);//只是为了调动handler执行UI更新
+        }
+    }
+
+    private Handler mhandler = new Handler(){
+        @Override
+        public void handleMessage(Message msg) {
+            super.handleMessage(msg);
+            //更新viewpager当前显示的pager
+            mViewPager.setCurrentItem(currentItem);
+        }
+    };
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        if (scheduledExecutorService != null){
+            scheduledExecutorService.shutdown();
+            scheduledExecutorService = null;
+        }
+    }
 
     private class ViewPagerAdapter extends PagerAdapter{
         //是获取当前窗体界面数量
